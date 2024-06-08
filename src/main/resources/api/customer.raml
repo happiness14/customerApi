@@ -1,0 +1,61 @@
+#%RAML 1.0
+
+title: Customer
+mediaType:
+  - application/json
+version: "1.0"
+protocols:
+  - HTTP
+  - HTTPS
+baseUri: salesforce
+securitySchemes:
+  basic : !include securityScheme.raml
+securedBy: [basic]
+uses:
+  lib : library.raml
+
+traits:
+  errorTraits: !include /errorTrait.raml
+  successTraits: !include /successResponseTrait.raml
+
+/customer:
+  get:
+    description: Get Salesforce customer detail matching email id
+    is: errorTraits
+    queryParameters:
+      email:
+        example: gif@hello.com
+        type: string    
+    responses:
+      "200":
+        body:
+          type: lib.companyCustomerType | lib.individualCustomerType
+  post:
+    description: "insert customers to Salesforce if customer email already doesn't exist at SF. "
+    is : [errorTraits]
+    body:      
+        type: lib.companyCustomerType | lib.individualCustomerType
+    responses:
+      "201":
+        body:
+          properties:
+            message:
+              example: "record created successfully"
+              type: string
+            status:
+              example: Example
+              type: string
+  put:
+    description: Update Salesforce customer matching email id
+    is: [errorTraits,successTraits]
+    body:
+      type: lib.companyCustomerType | lib.individualCustomerType
+    
+  delete:
+    description: delete customer from SF by matching the email id in query param
+    is: [errorTraits,successTraits]
+    queryParameters:
+      email:
+        example: arti@hello.com
+        type: string
+    

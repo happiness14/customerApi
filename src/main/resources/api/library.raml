@@ -1,0 +1,80 @@
+#%RAML 1.0 Library
+
+types:
+  addressType:
+    description: Address schema definition
+    properties:
+      street:
+        example: street1
+        type: string
+      city:
+        example: San Francisco
+        type: string
+      postalCode:
+        example: "67435"
+        type: string
+      stateCode:
+        example: CA
+        type: string
+      countryCode:
+        example: USA
+        type: string
+  
+  individualCustomerType:
+    properties:
+      
+      FirstName:
+        example: Amit
+        type: string
+        required : true
+      LastName:
+        example: Snow
+        type: string
+        required: true
+      CompanyName:
+        example: Whoknows
+        type: string        
+      Email:
+        example: arti@hello.com
+        type: string
+        pattern: .+@.+\..+
+        required: true
+      CustomerType:
+        example: Individual
+        type: string
+        enum: [Individual, Company]
+        required: true
+      AddressList:
+        items:
+          type: addressType
+  
+  companyCustomerType:
+    properties:
+      FirstName:
+        example: Amit
+        type: string        
+      LastName:
+        example: Snow
+        type: string          
+      CompanyName:
+        example: Whoknows
+        type: string
+        required: true
+      Email:
+        example: arti@hello.com
+        type: string
+        pattern: .+@.+\..+
+        required : true
+      CustomerType:
+        example: Company
+        type: string
+        enum: [Individual, Company]
+        required : true
+      AddressList:
+        items:
+          type: addressType
+
+
+securitySchemes:
+    :
+        type: Basic Authentication  

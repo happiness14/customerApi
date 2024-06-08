@@ -1,0 +1,48 @@
+#%RAML 1.0 Trait
+
+responses:
+  400:
+    body:
+      application/json:
+        example: |
+          {"message":"Bad Request", "errorCode":"400"}
+  404:
+    body:
+      application/json:
+        example: |
+          {"message":"Resource not found", "errorCode":"404"}
+  401:
+    body:
+      application/json:
+        example: |
+          {"message":"Unauthorized", "errorCode":"401"}
+
+  405:
+    body:
+      application/json:
+        example: |
+          {"message":"Method not allowed", "errorCode":"405"}
+
+  406:
+    body:
+      application/json:
+        example: |
+          {"message":"Not acceptable", "errorCode":"406"}
+
+  415:
+    body:
+      application/json:
+        example: |
+          {"message":"Unsupported media type", "errorCode":"415"}        
+
+  500:
+    body:
+      application/json:
+        example: |
+          {"message":"Internal Server Error", "errorCode":"500"}
+
+  501:
+    body:
+      application/json:
+        example: |
+          {"message":"Not Implemented", "errorCode":"501"}        

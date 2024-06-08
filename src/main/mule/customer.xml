@@ -1,0 +1,326 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd  http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd">
+    <flow name="customer-main">
+        <http:listener config-ref="customer-httpListenerConfig" path="/api/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body>#[payload]</http:body>
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:router config-ref="customer-config" />
+		<error-handler ref="CUstomerAPI_Error_Handler" />
+    </flow>
+    <flow name="customer-console">
+        <http:listener config-ref="customer-httpListenerConfig" path="/console/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body>#[payload]</http:body>
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:console config-ref="customer-config" />
+        <error-handler>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found",
+	errorCode: "404"
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus"><![CDATA[404]]></ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    <flow name="put:\customer:application\json:customer-config">
+        <logger level="INFO" doc:name="Logger-PUT request received" doc:id="944b3dc6-d163-47c4-ac23-e25470614396" message='#["received PUT API request"]'/>
+		<logger level="INFO" doc:name="Logger" doc:id="6202d120-0bb0-4489-8ac5-a85151e66d83" message="#[payload]"/>
+		<salesforce:query doc:name="Get Salesforce ID" doc:id="15f3d428-8907-438e-92b0-6ac17aabb0f6" config-ref="Salesforce_Config" target="SfId">
+            <reconnect count="3" />
+			<salesforce:salesforce-query><![CDATA[select Id from Customer__c where Email__c = ':email']]></salesforce:salesforce-query>
+            <salesforce:parameters><![CDATA[#[output application/java
+---
+{
+	"email" : payload.Email as String
+}]]]></salesforce:parameters>
+        </salesforce:query>
+        <choice doc:name="Choice" doc:id="7a80c453-84d5-42c9-a177-c7bed91dc1df">
+            <when expression="#[!isEmpty(vars.SfId)]">
+                <logger level="INFO" doc:name="Logger" doc:id="5618033d-f078-4600-9453-bf24a4c9d8f0" message="Found customer at Salesforce #[vars.SfId]"/>
+				<ee:transform doc:name="Transform Message" doc:id="79d11071-b4d3-4eb1-8dc2-bf33364dabcf">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+vars.SfId map ( sfId , indexOfSfId ) -> {
+	
+	Id: sfId.Id,
+	Name: if(payload."CustomerType" == "Individual") (payload.FirstName ++ " " ++ payload.LastName) else payload.CompanyName,
+	First_Name__c: payload.FirstName default "",
+	Last_Name__c: payload.LastName default "",
+	Company_Name__c: payload.CompanyName default "",
+	Email__c: payload.Email default "",
+	CustomerType__c: payload."CustomerType",
+	ShippingAddress__Street__s: payload.AddressList[0].street,
+	ShippingAddress__City__s: payload.AddressList[0].city,
+	ShippingAddress__PostalCode__s: payload.AddressList[0].postalCode,
+	ShippingAddress__StateCode__s: payload.AddressList[0].stateCode,
+	ShippingAddress__CountryCode__s: payload.AddressList[0].countryCode,
+	
+	BillingAddress__Street__s: payload.AddressList[1].street,
+	BillingAddress__City__s: payload.AddressList[1].city,
+	BillingAddress__PostalCode__s: payload.AddressList[1].postalCode,
+	BillingAddress__StateCode__s: payload.AddressList[1].stateCode,
+	BillingAddress__CountryCode__s: payload.AddressList[1].countryCode
+}]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+                <logger level="INFO" doc:name="Logger" doc:id="26e40c99-6bd4-4070-a4f9-9bc76cda5cf9" message="SFDC Request #[payload]"/>
+				<salesforce:update type="Customer__c" doc:name="Update" doc:id="66471938-2954-4c46-9649-18aa6365c716" config-ref="Salesforce_Config" >
+					<reconnect count="3" />
+				</salesforce:update>
+                <ee:transform doc:name="API success response" doc:id="e608fde6-7259-4d48-9d80-ed3570a42fbe">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"message" :if(payload.successful) "record updated successfully" else ("can not update record at Salesforce" ++ payload.items[0].message as String ),
+	"errorCode" : if(payload.successful) "201" else "500"
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus"><![CDATA[if(payload.successful) 201 else 500]]></ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+				<logger level="INFO" doc:name="Logger" doc:id="5f7c4198-ff76-475b-8c55-147843b42b5e" message="Sent API response #[payload]"/>
+            </when>
+            <otherwise>
+                <ee:transform doc:name="API error response" doc:id="14be340f-a0cd-4062-9c5d-93284abe796f">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"message" : "customer does not exist at Salesforce. ",
+	"errorCode" : "400"
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus"><![CDATA[400]]></ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+				<logger level="INFO" doc:name="Logger" doc:id="7de50f25-0653-4f75-9303-56c027c9243b" message="customer does not exist at Salesforce"/>
+            </otherwise>
+        </choice>
+        <error-handler ref="SFFlow_ErrorHandler" />
+    </flow>
+    <flow name="delete:\customer:customer-config">
+        <logger level="INFO" doc:name="Logger" doc:id="53a20d44-6b84-4cfb-8f60-e130fce28ddd" message="received GET request #[attributes.queryParams.email as String]"/>
+		<salesforce:query doc:name="Get Salesforce ID" doc:id="b55ac4fd-2238-4d0b-b28b-a2c248743a11" config-ref="Salesforce_Config" target="SFId">
+            <reconnect count="3" />
+			<salesforce:salesforce-query><![CDATA[select Id from Customer__c where Email__c = ':email']]></salesforce:salesforce-query>
+            <salesforce:parameters><![CDATA[#[output application/java
+---
+{
+	"email" : attributes.queryParams.email as String
+}]]]></salesforce:parameters>
+        </salesforce:query>
+        <choice doc:name="Choice" doc:id="6e469407-185c-425e-8873-abf511cb441d" >
+			<when expression="#[!isEmpty(vars.SfId)]">
+				<logger level="INFO" doc:name="Logger" doc:id="b0af581d-f01a-46f0-9826-8dd45f409d36" message="Salesforce record #[vars.SfId]"/>
+				<salesforce:delete doc:name="Delete customer from SF" doc:id="aced63b5-e6cf-4913-8207-333152eb04e5" config-ref="Salesforce_Config">
+            <reconnect count="3" />
+			<salesforce:ids><![CDATA[#[vars.SFId.*Id]]]></salesforce:ids>
+        </salesforce:delete>
+				<ee:transform doc:name="Transform Message" doc:id="a5ed9691-eff4-4f0d-b971-7d42921c9081">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"message" : "record deleted successfully " ++ vars.SFId[0].Id as String,
+	"status" : "success"
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+				<logger level="INFO" doc:name="Logger - end" doc:id="58c2e85a-bd1b-4987-b90c-b22f83e29b79" message="record deleted from SF successfully"/>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Transform Message" doc:id="a5304bc6-cfb9-4c9a-b1ee-33c653a10681" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"message" : "customer does not exist at Salesforce. ",
+	"errorCode" : "400"
+}]]></ee:set-payload>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="httpStatus" ><![CDATA[400]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<logger level="INFO" doc:name="Logger" doc:id="c5362aa4-d8ea-435f-9c69-1449bc3d52bc" message="customer does not exist at Salesforce"/>
+			</otherwise>
+		</choice>
+        <error-handler ref="SFFlow_ErrorHandler" />
+    </flow>
+    <flow name="get:\customer:customer-config">
+        <logger level="INFO" doc:name="Logger" doc:id="197808a1-ef98-4518-ab6d-81bcc6a58cdb" message='received GET request for  #[attributes.queryParams.email default ""]'/>
+		<salesforce:query doc:name="Get customer from SF" doc:id="20cdba16-58c7-45db-9de9-07d682dceeab" config-ref="Salesforce_Config">
+            <reconnect count="3" />
+            <salesforce:salesforce-query><![CDATA[select First_Name__c,Last_Name__c,Company_Name__c,Email__c,CustomerType__c,ShippingAddress__c,BillingAddress__c from Customer__c where Email__c = ':email']]></salesforce:salesforce-query>
+            <salesforce:parameters><![CDATA[#[output application/java
+---
+{
+	"email" : attributes.queryParams.email default ""
+}]]]></salesforce:parameters>
+        </salesforce:query>
+		<choice doc:name="Choice" doc:id="507f9254-0635-422a-9d5a-252476c48c48">
+            <when expression="#[!isEmpty(payload)]">
+                <logger level="INFO" doc:name="Logger" doc:id="9b3954a4-072a-4b6a-933c-c6a41a0337d6" message="response from SF #[payload]" />
+				<ee:transform doc:name="Transform Message" doc:id="2d2eed66-35b2-4690-ba3d-e006c36d6c34">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload map {
+	
+  "FirstName": $.First_Name__c,
+  "LastName": $.Last_Name__c,
+  "CompanyName": $.Company_Name__c,
+  "Email": $.Email__c,
+  "CustomerType": $.CustomerType__c,
+  "AddressList": [
+    {
+      "street": $.ShippingAddress__c.street,
+      "city": $.ShippingAddress__c.city,
+      "postalCode": $.ShippingAddress__c.postalCode,
+      "stateCode": $.ShippingAddress__c.stateCode,
+      "countryCode": $.ShippingAddress__c.countryCode
+    },
+    {
+      "street": $.BillingAddress__c.street,
+      "city": $.BillingAddress__c.city,
+      "postalCode": $.BillingAddress__c.postalCode,
+      "stateCode": $.BillingAddress__c.stateCode,
+      "countryCode": $.BillingAddress__c.countryCode
+    }
+  ]
+
+}]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+				<logger level="INFO" doc:name="Logger" doc:id="d536f888-3383-47bb-bdce-19170407a1a6" message="GET API response #[payload]"/>
+            </when>
+            <otherwise>
+                <ee:transform doc:name="Transform Message" doc:id="b6944103-3da8-4f53-aac7-f5dec2af3b91">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"message" : "Customer does not exist at Salesforce",
+	"errorCode" : "400"
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus"><![CDATA[400]]></ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+				<logger level="INFO" doc:name="Logger" doc:id="345c4e42-34f9-40a3-b0d1-be42f8f3676c" message="customer does not exist at Salesforce"/>
+            </otherwise>
+        </choice>
+        <error-handler ref="SFFlow_ErrorHandler" />
+    </flow>
+    <flow name="post:\customer:application\json:customer-config">
+        <logger level="INFO" doc:name="Logger" doc:id="f7927ea9-cd6b-4c58-a300-db0c7fa681f8" message="received POST request #[payload]"/>
+		<salesforce:query doc:name="check if customer already exists" doc:id="5f80218b-a933-4b37-ac8c-0d66c281e077" config-ref="Salesforce_Config" target="customerExist" targetValue="#[!isEmpty(payload)]">
+            <reconnect count="3" />
+			<salesforce:salesforce-query><![CDATA[select Id from Customer__c where Email__c = ':email']]></salesforce:salesforce-query>
+            <salesforce:parameters><![CDATA[#[output application/java
+---
+{
+	"email" : payload.Email default ""
+}]]]></salesforce:parameters>
+        </salesforce:query>
+        <choice doc:name="Choice" doc:id="54d0a809-bef1-4649-ae35-4d49aba7ff34">
+            <when expression="#[!vars.customerExist]">
+                <ee:transform doc:name="create SF Request if customer does not exist" doc:id="cd32556d-65fa-47c7-8492-42fe5ef41fad">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+[{
+	Name: if(payload."CustomerType" == "Individual") (payload.FirstName ++ " " ++ payload.LastName) else payload.CompanyName,
+	First_Name__c: payload.FirstName default "",
+	Last_Name__c: payload.LastName default "",
+	Company_Name__c: payload.CompanyName default "",
+	Email__c: payload.Email default "",
+	CustomerType__c: payload."CustomerType",
+	ShippingAddress__Street__s: payload.AddressList[0].street,
+	ShippingAddress__City__s: payload.AddressList[0].city,
+	ShippingAddress__PostalCode__s: payload.AddressList[0].postalCode,
+	ShippingAddress__StateCode__s: payload.AddressList[0].stateCode,
+	ShippingAddress__CountryCode__s: payload.AddressList[0].countryCode,
+	
+	BillingAddress__Street__s: payload.AddressList[1].street,
+	BillingAddress__City__s: payload.AddressList[1].city,
+	BillingAddress__PostalCode__s: payload.AddressList[1].postalCode,
+	BillingAddress__StateCode__s: payload.AddressList[1].stateCode,
+	BillingAddress__CountryCode__s: payload.AddressList[1].countryCode
+}]]]></ee:set-payload>
+                    </ee:message>
+                </ee:transform>
+                <logger level="INFO" doc:name="Logger" doc:id="71245627-d7e5-44a1-9fa2-8e7188474bc6" message="SF Request #[payload]"/>
+				<salesforce:create doc:name="Create customer at SF" doc:id="56c26d7f-f498-48ec-a8f4-3467083617ab" config-ref="Salesforce_Config" type="Customer__c">
+                    <reconnect count="3" />
+                </salesforce:create>
+                <ee:transform doc:name="API response" doc:id="40f00b11-fd51-46fa-8eb2-e2bcfeedc78f">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"message" :if(payload.successful) "record created successfully" else ("can not create record at Salesforce" ++ payload.items[0].message as String ),
+	"errorCode" : if(payload.successful) "201" else "500"
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus"><![CDATA[if(payload.successful) 201 else 500]]></ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+                <logger level="INFO" doc:name="Logger" doc:id="67f14199-e11c-4568-9cb2-59dfd5149842" message="customer successfully created at Salesforce" />
+            </when>
+            <otherwise>
+                <ee:transform doc:name="API error response" doc:id="4af9864e-6fae-4b07-a880-60a4e8c938b2">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"message" : "customer already exist at Salesforce. Can not create a new customer with the same email id",
+	"errorCode" : "400"
+}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus"><![CDATA[400]]></ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+				<logger level="INFO" doc:name="Logger" doc:id="f8dffd29-c051-47d1-b2d3-b4a86445637a" message="customer already exist at Salesforce. Can not create a new customer with the same email id"/>
+            </otherwise>
+        </choice>
+        <error-handler ref="SFFlow_ErrorHandler" />
+    </flow>
+</mule>
