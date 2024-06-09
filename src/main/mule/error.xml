@@ -13,7 +13,7 @@ http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/
 output application/json
 ---
 {
-	"message" : "Exception occured at Salesforce" ++ (error.errorMessage as String default "") ++ (error.detailedDescription as String default ""),
+	"message" : "Exception occured at Salesforce " ++ (error.errorMessage as String default "") ++ (error.detailedDescription as String default ""),
 	"status" : "500"
 }]]></ee:set-payload>
 					</ee:message>
