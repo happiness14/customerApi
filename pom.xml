@@ -30,8 +30,21 @@
 				<version>${mule.maven.plugin.version}</version>
 				<extensions>true</extensions>
 				<configuration>
-					<classifier>---- select project type ----</classifier>
-				</configuration>
+    <cloudHubDeployment>
+      <uri>https://anypoint.mulesoft.com</uri>
+      <muleVersion>${app.runtime}</muleVersion>
+      <username>monalisha062024</username>
+      <password>Mulesoft@123</password>
+      <applicationName>CustomerAPI</applicationName>
+      <environment>SANDBOX</environment>
+      <region>us-east-1</region>
+      <workers>1</workers>
+      <workerType>MICRO</workerType>
+      <properties>
+        <key>value</key>
+      </properties>
+    </cloudHubDeployment>
+  </configuration>
 			</plugin>
 		</plugins>
 	</build>
